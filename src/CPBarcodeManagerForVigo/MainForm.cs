@@ -6,6 +6,8 @@ namespace CPBarcodeManagerForVigo;
 public sealed class MainForm : Form
 {
     private readonly TextBox _sourceFolderText = new();
+    private readonly Label _sourceFolderLabel = new();
+    private readonly Label _outputFolderLabel = new();
     private readonly TextBox _outputFolderText = new();
     private readonly NumericUpDown _skipChars = new();
     private readonly NumericUpDown _takeChars = new();
@@ -34,16 +36,25 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(850, 620);
 
-        var main = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Padding = new Padding(16)
-        };
-        main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
+        var tabControl = new TabControl { Dock = DockStyle.Fill, Padding = new Point(10, 3) };
+        var processingTab = new TabPage("Processing");
+        var settingsTab = new TabPage("Settings");
+
+        BuildProcessingTab(processingTab);
+        BuildSettingsTab(settingsTab);
+
+        tabControl.TabPages.Add(processingTab);
+        tabControl.TabPages.Add(settingsTab);
+
+        Controls.Add(tabControl);
+    }
+
+    private void BuildProcessingTab(TabPage processingTab)
+    {
+        var main = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(16) };
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 390));
         main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        Controls.Add(main);
+        processingTab.Controls.Add(main);
 
         var left = new TableLayoutPanel
         {
@@ -70,9 +81,8 @@ public sealed class MainForm : Form
         };
         left.Controls.Add(title);
 
-        left.Controls.Add(CreateFolderPicker("Source Folder", _sourceFolderText, BrowseSource));
-        left.Controls.Add(CreateFolderPicker("Output Folder", _outputFolderText, BrowseOutput));
-        left.Controls.Add(CreateSettingsGroup());
+        left.Controls.Add(CreateReadOnlyFolderDisplay("Source Folder", _sourceFolderLabel));
+        left.Controls.Add(CreateReadOnlyFolderDisplay("Output Folder", _outputFolderLabel));
         left.Controls.Add(CreateButtons());
 
         _summaryLabel.Text = "Files Found: 0\nProcessed: 0\nSuccessful: 0\nErrors: 0";
@@ -105,6 +115,34 @@ public sealed class MainForm : Form
         _logText.Font = new Font("Consolas", 10);
         _logText.Text = "Ready...";
         right.Controls.Add(_logText);
+    }
+
+    private void BuildSettingsTab(TabPage settingsTab)
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(16) };
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        settingsTab.Controls.Add(panel);
+
+        panel.Controls.Add(CreateFolderPicker("Import Folder", _sourceFolderText, BrowseSource));
+        panel.Controls.Add(CreateFolderPicker("Output Folder", _outputFolderText, BrowseOutput));
+        panel.Controls.Add(CreateSettingsGroup());
+
+        var saveButton = new Button { Text = "Save Settings", Width = 120, Height = 34, Margin = new Padding(0, 16, 0, 0) };
+        saveButton.Click += SaveSettingsClick;
+        panel.Controls.Add(saveButton);
+    }
+
+    private Control CreateReadOnlyFolderDisplay(string label, Label displayLabel)
+    {
+        var group = new GroupBox { Text = label, Dock = DockStyle.Top, Height = 60, Margin = new Padding(0, 0, 16, 12) };
+        displayLabel.Dock = DockStyle.Fill;
+        displayLabel.Padding = new Padding(10, 0, 10, 0);
+        displayLabel.TextAlign = ContentAlignment.MiddleLeft;
+        group.Controls.Add(displayLabel);
+        return group;
     }
 
     private Control CreateFolderPicker(string label, TextBox textBox, EventHandler browseHandler)
@@ -191,6 +229,8 @@ public sealed class MainForm : Form
     {
         _sourceFolderText.Text = _settings.SourceFolder;
         _outputFolderText.Text = _settings.OutputFolder;
+        _sourceFolderLabel.Text = _settings.SourceFolder;
+        _outputFolderLabel.Text = _settings.OutputFolder;
         _skipChars.Value = _settings.SkipCharacters;
         _takeChars.Value = _settings.TakeCharacters;
         _bottomMargin.Value = _settings.BottomMarginMm;
@@ -206,6 +246,15 @@ public sealed class MainForm : Form
         SettingsService.Save(_settings);
     }
 
+    private void SaveSettingsClick(object? sender, EventArgs e)
+    {
+        SaveUiIntoSettings();
+        // Update read-only labels on Processing tab
+        _sourceFolderLabel.Text = _settings.SourceFolder;
+        _outputFolderLabel.Text = _settings.OutputFolder;
+        MessageBox.Show(this, "Settings have been saved.", "Save Settings", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
     private void BrowseSource(object? sender, EventArgs e)
     {
         using var dlg = new FolderBrowserDialog { Description = "Select folder with SAP Customer Paperwork PDFs" };
@@ -215,7 +264,6 @@ public sealed class MainForm : Form
             _sourceFolderText.Text = dlg.SelectedPath;
             if (string.IsNullOrWhiteSpace(_outputFolderText.Text))
                 _outputFolderText.Text = Path.Combine(dlg.SelectedPath, "Output");
-            SaveUiIntoSettings();
         }
     }
 
@@ -226,13 +274,11 @@ public sealed class MainForm : Form
         if (dlg.ShowDialog(this) == DialogResult.OK)
         {
             _outputFolderText.Text = dlg.SelectedPath;
-            SaveUiIntoSettings();
         }
     }
 
     private void PreviewFirstFile(object? sender, EventArgs e)
     {
-        SaveUiIntoSettings();
         var validation = ValidateFolders();
         if (validation != null)
         {
@@ -264,7 +310,6 @@ public sealed class MainForm : Form
 
     private void StartProcessing(object? sender, EventArgs e)
     {
-        SaveUiIntoSettings();
         var validation = ValidateFolders();
         if (validation != null)
         {
