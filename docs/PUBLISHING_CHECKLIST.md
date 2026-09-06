@@ -1,25 +1,61 @@
-# Public GitHub Publishing Checklist
+# Publishing Checklist
 
-## Ownership and permission
+## CP Barcode Manager for Vigo
 
-- [ ] I am authorised to publish this workflow.
-- [ ] Publication does not breach my employment agreement.
-- [ ] Publication does not expose company intellectual property.
-- [ ] Use of the names “SAP” and “Contrado” is approved.
-- [ ] The MIT License is appropriate.
+### Source Code
+Confirm:
+- project builds
+- no merge conflicts
+- correct version
+- intended branch
+- clean working tree before release
 
-## Data protection
-
-- [ ] No real Excel exports or PDFs are included.
-- [ ] No customer or employee data is visible.
-- [ ] No credentials, email addresses, internal URLs, or confidential screenshots are included.
-- [ ] The Power Automate export has been manually inspected.
-
-## Recommended repository
-
-```text
-Name: sap-contrado-file-renamer
-Description: Power Automate Desktop workflow that validates SAP PDF filenames, matches consignment numbers against a Contrado Excel export, renames and routes documents, handles exceptions, and displays an end-of-run summary.
-Topics: power-automate-desktop, rpa, pdf-automation, excel-automation, document-management, windows
-First commit: Initial public release v1.3 with MIT license and documentation
+Build:
+```powershell
+dotnet build .\src\CPBarcodeManagerForVigo\CPBarcodeManagerForVigo.csproj
 ```
+
+### Functional Regression
+Confirm filename extraction, Code 128, every-page placement, dimensions, settings persistence, manual processing, automatic monitoring, slow-write protection, verified output, safe source removal, Needs Attention and Critical Error handling.
+
+### Documentation
+Confirm current content in:
+- `README.md`
+- `docs/INSTALLATION.md`
+- `docs/USER_GUIDE.md`
+- `docs/TECHNICAL_DESIGN.md`
+- `docs/TEST_PLAN.md`
+- `docs/PUBLISHING_CHECKLIST.md`
+
+### Privacy Review
+Do not publish production PDFs, customer data, credentials, internal URLs, private SharePoint paths, internal email addresses, confidential screenshots or production configuration.
+
+### Git Review
+```powershell
+git status
+git diff
+git diff --staged
+```
+
+### Commit
+Example:
+```powershell
+git add README.md docs
+git commit -m "Update documentation for CP Barcode Manager v0.2.0"
+```
+
+### Push
+```powershell
+git push origin main
+```
+
+Do not use force push in the normal workflow.
+
+### Verify GitHub
+Check latest commit, README rendering, documentation links, source files, privacy, and removal of obsolete project descriptions.
+
+### v0.2.0 Release Gate
+Confirm Desktop build, automatic monitoring, slow-write test, output verification, source deletion safety, invalid-file routing and synthetic test data.
+
+### Windows Service
+Keep status as `Planned` until implementation and testing are complete.

@@ -1,45 +1,80 @@
 # Technical Design
 
-## Main sequence
+## CP Barcode Manager for Vigo v0.2.0
 
-1. Collect `.xlsx` files from `Config` and require exactly one.
-2. Open Excel, read the worksheet into `ExcelData`, and close Excel.
-3. Collect PDFs from `SAP_Import`.
-4. Initialise `TotalPDFCount`, `SuccessCount`, `NoMappingCount`, `DuplicateCount`, and `InvalidFileNameCount`.
-5. Process each PDF.
-6. Archive the Excel report.
-7. Build and display the final report.
+### Objective
+Prepare Customer Paperwork PDFs for Vigo by extracting a customer reference from the filename and adding a Code 128 barcode to every page.
 
-## Filename validation
+### Platform
+- C#
+- .NET 8
+- Windows Forms
+- ZXing.Net
+- PDFsharp
 
-```regex
-^00[0-9]{8}
-```
+### Key Files
+- `Models/AppSettings.cs`
+- `Models/ProcessResult.cs`
+- `Services/BarcodeImageService.cs`
+- `Services/BarcodeValueExtractor.cs`
+- `Services/CsvLogService.cs`
+- `Services/PdfBarcodeService.cs`
+- `Services/SettingsService.cs`
+- `MainForm.cs`
+- `Program.cs`
 
-If the match position is `-1`, move the file to `Errors\Invalid_File_Name` and continue to the next PDF.
+### Filename Extraction
+Defaults:
+- `SkipCharacters = 2`
+- `TakeCharacters = 8`
 
-## Extraction and matching
+Example:
+`0080001234202606011125.pdf` -> `80001234`
 
-Extract eight characters from `CurrentPDF.NameWithoutExtension`, beginning at index `2`, into `ConNoFromFile`. Filter `ExcelData` where `Con No` equals `ConNoFromFile`.
+The extracted value must contain digits only.
 
-If no row is found, move the PDF to `Errors\No_Mapping`. Otherwise set:
+### Barcode
+- Code 128
+- applied to every page
+- Bottom Left / Bottom Centre / Bottom Right
+- default 50 mm x 12 mm
+- default bottom margin 20 mm
 
-```text
-ContradoReference = FilteredRows[0]['Reference']
-```
+### Settings
+`AppSettings` stores source/output paths, extraction settings, barcode placement and dimensions, bottom margin, monitoring enabled state and interval.
 
-If `Contrado_Output\<ContradoReference>.pdf` already exists, move the incoming PDF to `Errors\Duplicate_File`. Otherwise rename and move it to `Contrado_Output`.
+Persisted at:
+`%LOCALAPPDATA%\CP Barcode Manager for Vigo\settings.json`
 
-## Excel archive
+### PDF Safety
+`PdfBarcodeService` writes to a temporary PDF, verifies existence, non-zero size and page count, then promotes it to the final output.
 
-Move the Excel report to `Archive\Excel`, then rename it:
+The source is removed only after successful output verification.
 
-```text
-Contrado_Report_dd.MM.yyyy_HH-mm-ss.xlsx
-```
+### Automatic Monitoring
+The WinForms timer tracks file length, last-write UTC and stable checks. Files must remain unchanged across scans and be available with `FileShare.None`.
 
-## Final invariant
+A second readiness check runs before processing.
 
-```text
-TotalPDFCount = SuccessCount + NoMappingCount + DuplicateCount + InvalidFileNameCount
-```
+### Result Model
+User-facing statuses:
+- Ready for Vigo
+- Needs Attention
+- Critical Error
+
+### Error Workflow
+On normal processing failure, the original is copied to Output using an `ERROR_` prefix, the copy is verified, then the source is removed. If safe cleanup cannot complete, the result becomes Critical Error.
+
+### Logging
+The Desktop app shows a processing log and manual batch mode writes a CSV log to Output.
+
+### Planned Architecture
+Future structure:
+Shared Processing Core -> WinForms Desktop + Windows Service
+
+The shared core should own filename extraction, barcode generation, PDF processing, verification, readiness rules and result models.
+
+### Windows Service Considerations
+Service account, least-privilege permissions, persistent logging, recovery, configuration, approved UNC/network/SharePoint paths, and IT deployment approval.
+
+v0.2.0 implements the Desktop application only. The Windows Service remains planned.

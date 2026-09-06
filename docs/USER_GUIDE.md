@@ -1,31 +1,71 @@
 # User Guide
 
-## Before running
+## CP Barcode Manager for Vigo v0.2.0
 
-1. Put exactly one Contrado `.xlsx` report in `Config`.
-2. Close the Excel report.
-3. Put SAP PDFs in `SAP_Import`.
-4. Run the flow in Power Automate Desktop.
-5. Read exception messages and the final report.
+The application reads a customer reference from the PDF filename and adds a Code 128 barcode to every page.
 
-## Review after running
+### Processing Tab
+Shows:
+- Import Folder
+- Output Folder
+- Barcode Settings
+- Preview
+- Start Processing
+- Exit
+- Progress
+- Status
+- Summary
+- Automation Status
+- Processing Log
 
-```text
-Contrado_Output
-Errors\No_Mapping
-Errors\Duplicate_File
-Errors\Invalid_File_Name
-Archive\Excel
-```
+### Settings Tab
+Configure:
+- Import Folder
+- Output Folder
+- Barcode position
+- Barcode width
+- Barcode height
+- Bottom margin
+- Automatic Folder Monitoring
+- Scan interval
 
-`SAP_Import` and `Config` should normally be empty after a completed run.
+Use `Save Settings` after changes.
 
-## Exceptions
+### Filename Rule
+Example:
+`0080001234202606011125.pdf`
 
-- **Not found in Contrado:** check VIGO and follow the approved upload, deletion, or escalation process.
-- **Duplicate PDF:** review the new file in `Errors\Duplicate_File` before replacing or deleting anything.
-- **Invalid filename:** confirm the correct consignment number before renaming.
-- **Missing Excel report:** download an approved Contrado report and place it in `Config`.
-- **Multiple Excel reports:** remove extra files; exactly one `.xlsx` is required.
+Default extraction:
+- ignore first 2 characters
+- read next 8 digits
+- result: `80001234`
 
-Email notification may be enabled only with a company-approved account or connection. Do not store private credentials in the distributed flow.
+### Barcode Placement
+- Every page
+- Bottom Left / Bottom Centre / Bottom Right
+- Default: Bottom Centre, 50 mm x 12 mm, 20 mm bottom margin
+
+### Preview
+Shows the first PDF's filename, extracted reference, placement and dimensions. It does not process the PDF.
+
+### Manual Processing
+1. Check Import and Output folders.
+2. Place PDFs in Import.
+3. Select `Start Processing`.
+4. Wait for completion.
+5. Review status and log.
+
+### Automatic Processing
+Enable `Automatically monitor Import Folder`.
+
+A new PDF is processed only after its size and last-write time are stable and exclusive read access is available.
+
+### Statuses
+- `Ready for Vigo` — output verified and source removed.
+- `Needs Attention` — original routed to Output with `ERROR_` prefix.
+- `Critical Error` — safety-critical operation could not be completed; source may remain for protection.
+
+### User Rules
+Do not use the same folder for Import and Output. Do not rename or manually delete files during processing. Review Critical Errors before taking manual action.
+
+Automatic monitoring stops when the Desktop application is closed.
