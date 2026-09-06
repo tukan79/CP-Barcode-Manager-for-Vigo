@@ -6,8 +6,8 @@ namespace CPBarcodeManagerForVigo.Services;
 public static class SettingsService
 {
     private static readonly string SettingsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "CPBarcodeManagerForVigo");
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "CP Barcode Manager for Vigo");
 
     private static readonly string SettingsPath = Path.Combine(SettingsDir, "settings.json");
 
