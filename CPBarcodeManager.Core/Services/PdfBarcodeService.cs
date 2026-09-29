@@ -4,7 +4,7 @@ using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
-namespace CPBarcodeManagerForVigo.Services;
+namespace CPBarcodeManager.Core.Services;
 
 public sealed class PdfBarcodeService
 {
