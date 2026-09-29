@@ -1,5 +1,5 @@
 using System.Text.Json;
-using CPBarcodeManagerForVigo.Models;
+using CPBarcodeManager.Core.Models;
 
 namespace CPBarcodeManagerForVigo.Services;
 

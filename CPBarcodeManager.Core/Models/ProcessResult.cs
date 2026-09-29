@@ -1,4 +1,4 @@
-namespace CPBarcodeManagerForVigo.Models;
+namespace CPBarcodeManager.Core.Models;
 
 public sealed class ProcessResult
 {

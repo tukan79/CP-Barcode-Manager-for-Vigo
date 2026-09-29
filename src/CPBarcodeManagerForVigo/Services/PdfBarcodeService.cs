@@ -1,5 +1,5 @@
 using CPBarcodeManager.Core.Services;
-using CPBarcodeManagerForVigo.Models;
+using CPBarcodeManager.Core.Models;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;

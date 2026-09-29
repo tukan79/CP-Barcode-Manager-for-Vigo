@@ -1,5 +1,5 @@
 using System.Text;
-using CPBarcodeManagerForVigo.Models;
+using CPBarcodeManager.Core.Models;
 
 namespace CPBarcodeManagerForVigo.Services;
 
