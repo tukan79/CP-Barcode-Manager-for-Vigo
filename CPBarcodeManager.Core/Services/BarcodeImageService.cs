@@ -3,7 +3,7 @@ using System.Drawing.Imaging;
 using ZXing;
 using ZXing.Windows.Compatibility;
 
-namespace CPBarcodeManagerForVigo.Services;
+namespace CPBarcodeManager.Core.Services;
 
 public static class BarcodeImageService
 {
@@ -28,3 +28,4 @@ public static class BarcodeImageService
         return stream;
     }
 }
+
