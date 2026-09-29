@@ -1,3 +1,4 @@
+using CPBarcodeManager.Core.Services;
 using CPBarcodeManagerForVigo.Models;
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
@@ -298,3 +299,4 @@ public sealed class PdfBarcodeService
             "Unable to create unique output file name.");
     }
 }
+

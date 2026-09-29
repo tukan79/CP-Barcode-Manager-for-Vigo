@@ -15,4 +15,8 @@
     <PackageReference Include="ZXing.Net" Version="0.16.10" />
     <PackageReference Include="ZXing.Net.Bindings.Windows.Compatibility" Version="0.16.12" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\CPBarcodeManager.Core\CPBarcodeManager.Core.csproj" />
+  </ItemGroup>
 </Project>

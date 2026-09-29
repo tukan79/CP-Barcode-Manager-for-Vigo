@@ -1,4 +1,4 @@
-namespace CPBarcodeManagerForVigo.Services;
+namespace CPBarcodeManager.Core.Services;
 
 public static class BarcodeValueExtractor
 {

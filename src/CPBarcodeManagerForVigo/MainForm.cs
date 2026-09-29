@@ -1,3 +1,4 @@
+using CPBarcodeManager.Core.Services;
 using CPBarcodeManagerForVigo.Models;
 using CPBarcodeManagerForVigo.Services;
 
