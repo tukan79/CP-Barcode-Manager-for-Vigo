@@ -1,4 +1,5 @@
 using CPBarcodeManager.Core.Models;
+using CPBarcodeManager.Core.Services;
 
 namespace CPBarcodeManager.Service;
 
@@ -6,6 +7,17 @@ public class Worker(
     ILogger<Worker> logger,
     IConfiguration configuration) : BackgroundService
 {
+    private readonly Dictionary<string, FileSnapshot> _fileSnapshots =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly HashSet<string> _blockedFiles =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private sealed record FileSnapshot(
+        long Length,
+        DateTime LastWriteUtc,
+        int StableChecks);
+
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
@@ -30,22 +42,154 @@ public class Worker(
                 continue;
             }
 
-            logger.LogInformation(
-                "Configuration ready. Source: {source}. Output: {output}.",
-                settings.SourceFolder,
-                settings.OutputFolder);
+            try
+            {
+                var stableFiles =
+                    FindStablePdfFiles(settings.SourceFolder);
 
-            // File monitoring and processing will be added
-            // only after configuration validation is tested.
+                if (stableFiles.Count == 0)
+                {
+                    logger.LogInformation(
+                        "Monitoring Import Folder. No stable PDFs ready.");
+                }
+                else
+                {
+                    foreach (var file in stableFiles)
+                    {
+                        if (!File.Exists(file) ||
+                            _blockedFiles.Contains(file))
+                        {
+                            continue;
+                        }
+
+                        logger.LogInformation(
+                            "Processing PDF: {file}",
+                            Path.GetFileName(file));
+
+                        var result =
+                            new ProcessingWorkflowService()
+                                .ProcessFileForVigo(
+                                    file,
+                                    settings);
+
+                        if (result.Status == "Critical Error")
+                        {
+                            _blockedFiles.Add(file);
+
+                            logger.LogCritical(
+                                "CRITICAL ERROR processing {file}: {message} " +
+                                "The source file has been blocked from automatic retry.",
+                                Path.GetFileName(file),
+                                result.Message);
+                        }
+                        else
+                        {
+                            _fileSnapshots.Remove(file);
+
+                            if (result.Status == "Ready for Vigo")
+                            {
+                                logger.LogInformation(
+                                    "READY FOR VIGO: {file}. " +
+                                    "Customer Reference: {reference}. " +
+                                    "Output: {output}",
+                                    result.FileName,
+                                    result.CustomerReference,
+                                    result.OutputPath);
+                            }
+                            else
+                            {
+                                logger.LogWarning(
+                                    "{status}: {file}. {message}",
+                                    result.Status,
+                                    result.FileName,
+                                    result.Message);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(
+                    ex,
+                    "Import Folder scan failed.");
+            }
+
             await DelayAsync(
                 settings.MonitorIntervalSeconds,
                 stoppingToken);
         }
     }
 
+    private List<string> FindStablePdfFiles(
+        string sourceFolder)
+    {
+        var currentFiles = Directory
+            .GetFiles(sourceFolder, "*.pdf")
+            .OrderBy(x => x)
+            .ToList();
+
+        var existingSet =
+            new HashSet<string>(
+                currentFiles,
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var knownPath in _fileSnapshots.Keys.ToList())
+        {
+            if (!existingSet.Contains(knownPath))
+                _fileSnapshots.Remove(knownPath);
+        }
+
+        var stableFiles = new List<string>();
+
+        foreach (var file in currentFiles)
+        {
+            if (_blockedFiles.Contains(file))
+                continue;
+
+            var info = new FileInfo(file);
+
+            var currentLength = info.Length;
+            var currentWriteUtc = info.LastWriteTimeUtc;
+
+            if (_fileSnapshots.TryGetValue(
+                    file,
+                    out var previous) &&
+                previous.Length == currentLength &&
+                previous.LastWriteUtc == currentWriteUtc)
+            {
+                var updated = previous with
+                {
+                    StableChecks =
+                        previous.StableChecks + 1
+                };
+
+                _fileSnapshots[file] = updated;
+
+                if (updated.StableChecks >= 1 &&
+                    ProcessingWorkflowService
+                        .CanOpenForExclusiveRead(file))
+                {
+                    stableFiles.Add(file);
+                }
+            }
+            else
+            {
+                _fileSnapshots[file] =
+                    new FileSnapshot(
+                        currentLength,
+                        currentWriteUtc,
+                        0);
+            }
+        }
+
+        return stableFiles;
+    }
+
     private AppSettings LoadSettings()
     {
-        var section = configuration.GetSection("BarcodeService");
+        var section =
+            configuration.GetSection("BarcodeService");
 
         return new AppSettings
         {
@@ -56,26 +200,45 @@ public class Worker(
                 section["OutputFolder"] ?? string.Empty,
 
             SkipCharacters =
-                GetInt(section, "SkipCharacters", 2),
+                GetInt(
+                    section,
+                    "SkipCharacters",
+                    2),
 
             TakeCharacters =
-                GetInt(section, "TakeCharacters", 8),
+                GetInt(
+                    section,
+                    "TakeCharacters",
+                    8),
 
             BarcodePosition =
-                section["BarcodePosition"] ?? "Bottom Centre",
+                section["BarcodePosition"] ??
+                "Bottom Centre",
 
             BarcodeWidthMm =
-                GetInt(section, "BarcodeWidthMm", 50),
+                GetInt(
+                    section,
+                    "BarcodeWidthMm",
+                    50),
 
             BarcodeHeightMm =
-                GetInt(section, "BarcodeHeightMm", 12),
+                GetInt(
+                    section,
+                    "BarcodeHeightMm",
+                    12),
 
             BottomMarginMm =
-                GetInt(section, "BottomMarginMm", 20),
+                GetInt(
+                    section,
+                    "BottomMarginMm",
+                    20),
 
             MonitorIntervalSeconds =
                 Math.Clamp(
-                    GetInt(section, "ScanIntervalSeconds", 5),
+                    GetInt(
+                        section,
+                        "ScanIntervalSeconds",
+                        5),
                     2,
                     60),
 
@@ -86,8 +249,16 @@ public class Worker(
     private static bool ConfigurationIsReady(
         AppSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(settings.SourceFolder) ||
-            string.IsNullOrWhiteSpace(settings.OutputFolder))
+        if (string.IsNullOrWhiteSpace(
+                settings.SourceFolder) ||
+            string.IsNullOrWhiteSpace(
+                settings.OutputFolder))
+        {
+            return false;
+        }
+
+        if (!Directory.Exists(settings.SourceFolder) ||
+            !Directory.Exists(settings.OutputFolder))
         {
             return false;
         }
@@ -115,7 +286,9 @@ public class Worker(
         string key,
         int defaultValue)
     {
-        return int.TryParse(section[key], out var value)
+        return int.TryParse(
+            section[key],
+            out var value)
             ? value
             : defaultValue;
     }
@@ -125,7 +298,8 @@ public class Worker(
         CancellationToken stoppingToken)
     {
         await Task.Delay(
-            TimeSpan.FromSeconds(Math.Clamp(seconds, 2, 60)),
+            TimeSpan.FromSeconds(
+                Math.Clamp(seconds, 2, 60)),
             stoppingToken);
     }
 }

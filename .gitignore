@@ -14,3 +14,5 @@ obj/
 
 # Logs
 *.log
+# Local Windows Service DEV test environment
+ServiceDevTest/
