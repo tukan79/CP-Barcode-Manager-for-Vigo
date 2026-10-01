@@ -13,6 +13,16 @@ public class Worker(
     private readonly HashSet<string> _blockedFiles =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly CriticalStateStore _criticalStateStore =
+        new(Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.CommonApplicationData),
+            "CP Barcode Manager for Vigo",
+            "Service",
+            "critical-state.json"));
+
+    private bool _criticalStateLoaded;
+
     private sealed record FileSnapshot(
         long Length,
         DateTime LastWriteUtc,
@@ -44,6 +54,12 @@ public class Worker(
 
             try
             {
+                if (!_criticalStateLoaded)
+                {
+                    LoadPersistentCriticalState();
+                    _criticalStateLoaded = true;
+                }
+
                 var stableFiles =
                     FindStablePdfFiles(settings.SourceFolder);
 
@@ -75,6 +91,20 @@ public class Worker(
                         if (result.Status == "Critical Error")
                         {
                             _blockedFiles.Add(file);
+
+                            try
+                            {
+                                _criticalStateStore.AddOrUpdate(
+                                    file,
+                                    result.Message);
+                            }
+                            catch (Exception stateEx)
+                            {
+                                logger.LogError(
+                                    stateEx,
+                                    "Unable to persist critical state for {file}.",
+                                    Path.GetFileName(file));
+                            }
 
                             logger.LogCritical(
                                 "CRITICAL ERROR processing {file}: {message} " +
@@ -184,6 +214,53 @@ public class Worker(
         }
 
         return stableFiles;
+    }
+
+    private void LoadPersistentCriticalState()
+    {
+        var records = _criticalStateStore.Load();
+
+        foreach (var record in records)
+        {
+            if (string.IsNullOrWhiteSpace(record.SourcePath))
+                continue;
+
+            var fullPath = Path.GetFullPath(record.SourcePath);
+
+            if (!File.Exists(fullPath))
+            {
+                _criticalStateStore.Remove(fullPath);
+                continue;
+            }
+
+            var info = new FileInfo(fullPath);
+
+            var sameFile =
+                info.Length == record.SourceLength &&
+                info.LastWriteTimeUtc == record.SourceLastWriteUtc;
+
+            if (sameFile)
+            {
+                _blockedFiles.Add(fullPath);
+            }
+            else
+            {
+                _criticalStateStore.Remove(fullPath);
+
+                logger.LogInformation(
+                    "Removed stale critical-state record for {file}. " +
+                    "A different file now exists at the same path.",
+                    Path.GetFileName(fullPath));
+            }
+        }
+
+        if (_blockedFiles.Count > 0)
+        {
+            logger.LogWarning(
+                "Loaded {count} persistently blocked file(s). " +
+                "They will not be automatically retried.",
+                _blockedFiles.Count);
+        }
     }
 
     private AppSettings LoadSettings()
