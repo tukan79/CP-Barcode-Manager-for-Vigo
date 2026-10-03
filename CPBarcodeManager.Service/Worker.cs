@@ -22,6 +22,8 @@ public class Worker(
             "critical-state.json"));
 
     private bool _criticalStateLoaded;
+    private bool? _configurationReady;
+    private bool _criticalStateUnavailable;
 
     private sealed record FileSnapshot(
         long Length,
@@ -40,10 +42,16 @@ public class Worker(
 
             if (!ConfigurationIsReady(settings))
             {
-                logger.LogWarning(
-                    "Configuration not ready. " +
-                    "SourceFolder or OutputFolder is not configured. " +
-                    "No files will be processed.");
+                if (_configurationReady != false)
+                {
+                    logger.LogWarning(
+                        "Configuration not ready. " +
+                        "SourceFolder or OutputFolder is missing, unavailable, " +
+                        "or resolves to the same folder. " +
+                        "No files will be processed.");
+
+                    _configurationReady = false;
+                }
 
                 await DelayAsync(
                     settings.MonitorIntervalSeconds,
@@ -52,23 +60,56 @@ public class Worker(
                 continue;
             }
 
+            if (_configurationReady != true)
+            {
+                logger.LogInformation(
+                    "Configuration ready.");
+
+                _configurationReady = true;
+            }
+
             try
             {
                 if (!_criticalStateLoaded)
                 {
-                    LoadPersistentCriticalState();
-                    _criticalStateLoaded = true;
+                    try
+                    {
+                        LoadPersistentCriticalState();
+                        _criticalStateLoaded = true;
+
+                        if (_criticalStateUnavailable)
+                        {
+                            logger.LogInformation(
+                                "Persistent critical state recovered. " +
+                                "PDF processing resumed.");
+
+                            _criticalStateUnavailable = false;
+                        }
+                    }
+                    catch (Exception stateEx)
+                    {
+                        if (!_criticalStateUnavailable)
+                        {
+                            logger.LogError(
+                                stateEx,
+                                "Persistent critical state is unavailable or invalid. " +
+                                "PDF processing is suspended until the state can be read safely.");
+
+                            _criticalStateUnavailable = true;
+                        }
+
+                        await DelayAsync(
+                            settings.MonitorIntervalSeconds,
+                            stoppingToken);
+
+                        continue;
+                    }
                 }
 
                 var stableFiles =
                     FindStablePdfFiles(settings.SourceFolder);
 
-                if (stableFiles.Count == 0)
-                {
-                    logger.LogInformation(
-                        "Monitoring Import Folder. No stable PDFs ready.");
-                }
-                else
+                if (stableFiles.Count > 0)
                 {
                     foreach (var file in stableFiles)
                     {
@@ -137,6 +178,11 @@ public class Worker(
                         }
                     }
                 }
+            }
+            catch (OperationCanceledException)
+                when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
